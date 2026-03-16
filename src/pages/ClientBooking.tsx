@@ -104,6 +104,9 @@ export default function ClientBooking() {
           className="h-32 md:h-48 mx-auto mb-8 object-contain"
           referrerPolicy="no-referrer"
         />
+        <h1 className="text-4xl md:text-5xl font-serif font-semibold text-brand-900 mb-6">
+          Herzlich willkommen bei Caniluma
+        </h1>
         <p className="text-lg text-brand-700 max-w-2xl mx-auto leading-relaxed">
           Tiergestützte Förderung mit Hunden für Kinder und Jugendliche. 
           Ein achtsamer, verlässlicher Rahmen, in dem Kinder gesehen werden dürfen, so wie sie sind.

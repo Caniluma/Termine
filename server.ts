@@ -10,9 +10,9 @@ app.use(express.json());
 
 // Initialize Supabase Client
 // We use lazy initialization so the app doesn't crash on startup if keys are missing
-let supabaseClient: ReturnType<typeof createClient> | null = null;
+let supabaseClient: any = null;
 
-function getSupabase() {
+function getSupabase(): any {
   if (!supabaseClient) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,7 +26,68 @@ function getSupabase() {
   return supabaseClient;
 }
 
+// Admin Authentication Middleware
+const requireAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing or invalid authorization header' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const supabase = getSupabase();
+
+  try {
+    // Verify the token with Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+};
+
 // API Routes
+app.post('/api/admin/login', async (req, res) => {
+  const { password } = req.body;
+  // Die E-Mail-Adresse ist hier fest hinterlegt:
+  const email = 'info@caniluma.de';
+  
+  if (!password) {
+    return res.status(400).json({ error: 'Passwort wird benötigt' });
+  }
+
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) {
+      return res.status(500).json({ error: 'Supabase credentials not configured' });
+    }
+
+    // Create a temporary client that doesn't persist sessions on the server
+    const authClient = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false }
+    });
+
+    const { data, error } = await authClient.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      return res.status(401).json({ error: 'Ungültige E-Mail oder Passwort' });
+    }
+
+    res.json({ success: true, token: data.session.access_token });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 app.get('/api/slots', async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -51,7 +112,7 @@ app.get('/api/slots', async (req, res) => {
   }
 });
 
-app.post('/api/slots', async (req, res) => {
+app.post('/api/slots', requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
     const { startTime, endTime, type } = req.body;
@@ -77,7 +138,7 @@ app.post('/api/slots', async (req, res) => {
   }
 });
 
-app.delete('/api/slots/:id', async (req, res) => {
+app.delete('/api/slots/:id', requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
     const { id } = req.params;
@@ -110,7 +171,7 @@ app.delete('/api/slots/:id', async (req, res) => {
   }
 });
 
-app.get('/api/bookings', async (req, res) => {
+app.get('/api/bookings', requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
     

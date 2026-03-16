@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Calendar, Plus, Trash2, Users, Clock, LogOut } from 'lucide-react';
+import { Calendar, Plus, Trash2, Users, Clock, LogOut, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 interface Slot {
@@ -28,6 +28,11 @@ interface Booking {
 }
 
 export default function AdminDashboard() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [token, setToken] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState('');
+
   const [slots, setSlots] = useState<Slot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<'slots' | 'bookings'>('slots');
@@ -39,17 +44,64 @@ export default function AdminDashboard() {
   const [newType, setNewType] = useState<'einzel' | 'gruppe'>('einzel');
 
   useEffect(() => {
-    fetchSlots();
-    fetchBookings();
+    const savedToken = localStorage.getItem('adminToken');
+    if (savedToken) {
+      setToken(savedToken);
+      setIsAuthenticated(true);
+      fetchSlots();
+      fetchBookings(savedToken);
+    } else {
+      fetchSlots();
+    }
   }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await res.json();
+      
+      if (res.ok && data.token) {
+        setIsAuthenticated(true);
+        setToken(data.token);
+        localStorage.setItem('adminToken', data.token);
+        fetchSlots();
+        fetchBookings(data.token);
+        setLoginError('');
+      } else {
+        setLoginError(data.error || 'Login fehlgeschlagen');
+      }
+    } catch (err) {
+      console.error(err);
+      setLoginError('Ein Fehler ist aufgetreten');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setToken(null);
+    setPassword('');
+    localStorage.removeItem('adminToken');
+  };
 
   const fetchSlots = async () => {
     const res = await fetch('/api/slots');
     setSlots(await res.json());
   };
 
-  const fetchBookings = async () => {
-    const res = await fetch('/api/bookings');
+  const fetchBookings = async (authToken = token) => {
+    if (!authToken) return;
+    const res = await fetch('/api/bookings', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (res.status === 401) {
+      handleLogout();
+      return;
+    }
     setBookings(await res.json());
   };
 
@@ -63,13 +115,18 @@ export default function AdminDashboard() {
     try {
       const res = await fetch('/api/slots', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ startTime: start, endTime: end, type: newType })
       });
       if (res.ok) {
         fetchSlots();
         setNewStartTime('');
         setNewEndTime('');
+      } else if (res.status === 401) {
+        handleLogout();
       }
     } catch (err) {
       console.error(err);
@@ -80,9 +137,14 @@ export default function AdminDashboard() {
     if (!confirm('Möchten Sie diesen Termin wirklich löschen?')) return;
     
     try {
-      const res = await fetch(`/api/slots/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/slots/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) {
         fetchSlots();
+      } else if (res.status === 401) {
+        handleLogout();
       } else {
         const err = await res.json();
         alert(err.error);
@@ -91,6 +153,44 @@ export default function AdminDashboard() {
       console.error(err);
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-brand-100 max-w-md w-full">
+          <div className="flex justify-center mb-6">
+            <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center text-brand-700">
+              <Lock size={32} />
+            </div>
+          </div>
+          <h1 className="text-2xl font-serif font-semibold text-center text-brand-900 mb-6">Admin Login</h1>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-brand-700 mb-1">Passwort</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-brand-200 bg-brand-50 focus:outline-none focus:ring-2 focus:ring-accent-500"
+                placeholder="Passwort eingeben"
+                required
+              />
+            </div>
+            {loginError && <p className="text-red-500 text-sm">{loginError}</p>}
+            <button 
+              type="submit" 
+              className="w-full bg-accent-500 text-white py-3 rounded-xl hover:bg-accent-600 transition-colors font-medium"
+            >
+              Einloggen
+            </button>
+            <div className="text-center mt-4">
+              <Link to="/" className="text-sm text-brand-600 hover:text-brand-900">Zurück zur Startseite</Link>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12">
@@ -104,13 +204,15 @@ export default function AdminDashboard() {
           />
           <h1 className="text-3xl font-serif font-semibold text-brand-900">Verwaltung</h1>
         </div>
-        <Link 
-          to="/" 
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-brand-200 text-brand-700 rounded-xl hover:bg-brand-50 hover:text-brand-900 transition-colors font-medium shadow-sm"
-        >
-          <LogOut size={18} />
-          Zurück zur Startseite
-        </Link>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-white border border-brand-200 text-brand-700 rounded-xl hover:bg-brand-50 hover:text-brand-900 transition-colors font-medium shadow-sm"
+          >
+            <LogOut size={18} />
+            Abmelden
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-4 mb-8 border-b border-brand-200 pb-4">
