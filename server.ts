@@ -54,8 +54,8 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
 // API Routes
 app.post('/api/admin/login', async (req, res) => {
   const { password } = req.body;
-  // Die E-Mail-Adresse ist hier fest hinterlegt:
-  const email = 'info@caniluma.de';
+  // Admin email can be configured via Vercel Environment Variables
+  const email = process.env.ADMIN_EMAIL || 'info@caniluma.de';
   
   if (!password) {
     return res.status(400).json({ error: 'Passwort wird benötigt' });
