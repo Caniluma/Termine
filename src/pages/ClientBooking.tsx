@@ -35,10 +35,19 @@ export default function ClientBooking() {
   const fetchSlots = async () => {
     try {
       const res = await fetch('/api/slots');
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
-      setSlots(data);
+      if (Array.isArray(data)) {
+        setSlots(data);
+      } else {
+        console.error('Expected array of slots, got:', data);
+        setSlots([]);
+      }
     } catch (err) {
       console.error('Failed to fetch slots', err);
+      setSlots([]);
     } finally {
       setLoading(false);
     }
