@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "caniluma-terminbuchung",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,11 +12,9 @@
     "start": "tsx server.ts"
   },
   "dependencies": {
-    "@google/genai": "^1.29.0",
     "@supabase/supabase-js": "^2.99.1",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
-    "better-sqlite3": "^12.4.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "express": "^4.21.2",
@@ -38,5 +36,6 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "vite-plugin-pwa": "^1.2.0"
-  }
+  },
+  "description": "Terminbuchung für Caniluma mit React, Vite, Express, Supabase und Resend."
 }

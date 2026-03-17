@@ -3,29 +3,7 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Calendar, Plus, Trash2, Users, Clock, LogOut, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
-interface Slot {
-  id: number;
-  startTime: string;
-  endTime: string;
-  isBooked: number;
-  type: 'einzel' | 'gruppe';
-  maxCapacity: number;
-  bookedCount: number;
-}
-
-interface Booking {
-  id: number;
-  slotId: number;
-  parentName: string;
-  childName: string;
-  email: string;
-  phone: string;
-  notes: string;
-  startTime: string;
-  endTime: string;
-  type: 'einzel' | 'gruppe';
-}
+import { Slot, FormattedBooking } from '../types';
 
 export default function AdminDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -34,7 +12,7 @@ export default function AdminDashboard() {
   const [loginError, setLoginError] = useState('');
 
   const [slots, setSlots] = useState<Slot[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<FormattedBooking[]>([]);
   const [activeTab, setActiveTab] = useState<'slots' | 'bookings'>('slots');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -105,10 +83,10 @@ export default function AdminDashboard() {
         setSlots([]);
         setErrorMsg('Unerwartetes Datenformat vom Server.');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to fetch slots', err);
       setSlots([]);
-      setErrorMsg(err.message || 'Fehler beim Laden der Termine.');
+      setErrorMsg(err instanceof Error ? err.message : 'Fehler beim Laden der Termine.');
     }
   };
 
@@ -133,10 +111,10 @@ export default function AdminDashboard() {
       } else {
         setBookings([]);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to fetch bookings', err);
       setBookings([]);
-      setErrorMsg(err.message || 'Fehler beim Laden der Buchungen.');
+      setErrorMsg(err instanceof Error ? err.message : 'Fehler beim Laden der Buchungen.');
     }
   };
 
@@ -158,8 +136,10 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         fetchSlots();
+        setNewDate('');
         setNewStartTime('');
         setNewEndTime('');
+        setNewType('einzel');
       } else if (res.status === 401) {
         handleLogout();
       }
@@ -178,6 +158,28 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         fetchSlots();
+      } else if (res.status === 401) {
+        handleLogout();
+      } else {
+        const err = await res.json();
+        alert(err.error);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteBooking = async (id: number) => {
+    if (!confirm('Möchten Sie diese Buchung wirklich stornieren? Der Termin wird dadurch wieder freigegeben.')) return;
+    
+    try {
+      const res = await fetch(`/api/bookings/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        fetchBookings();
+        fetchSlots(); // Update slots as well since capacity changed
       } else if (res.status === 401) {
         handleLogout();
       } else {
@@ -420,6 +422,7 @@ export default function AdminDashboard() {
                       <div className="text-right">
                         <div className="font-medium text-brand-900">Kind: {booking.childName}</div>
                         <div className="text-brand-600">Elternteil: {booking.parentName}</div>
+                        <div className="text-brand-500 text-sm mt-1">Buchungs-Nr: CNL-{10000 + booking.id}</div>
                       </div>
                     </div>
                     
@@ -435,6 +438,16 @@ export default function AdminDashboard() {
                           <p className="text-brand-800 bg-white p-3 rounded-lg border border-brand-100">{booking.notes}</p>
                         </div>
                       )}
+                    </div>
+                    
+                    <div className="mt-4 pt-4 border-t border-brand-200 flex justify-end">
+                      <button 
+                        onClick={() => handleDeleteBooking(booking.id)}
+                        className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
+                      >
+                        <Trash2 size={16} />
+                        Buchung stornieren
+                      </button>
                     </div>
                   </div>
                 );

@@ -3,23 +3,22 @@ import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Calendar, Clock, Dog, Heart, CheckCircle2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-
-interface Slot {
-  id: number;
-  startTime: string;
-  endTime: string;
-  isBooked: number;
-  type: 'einzel' | 'gruppe';
-  maxCapacity: number;
-  bookedCount: number;
-}
+import { Slot, FormattedBooking } from '../types';
 
 export default function ClientBooking() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [bookingNumber, setBookingNumber] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'book' | 'my-bookings'>('book');
+
+  // My Bookings state
+  const [myBookingNumber, setMyBookingNumber] = useState('');
+  const [myBookings, setMyBookings] = useState<FormattedBooking[] | null>(null);
+  const [myBookingsError, setMyBookingsError] = useState<string | null>(null);
+  const [isLoadingBookings, setIsLoadingBookings] = useState(false);
 
   const [formData, setFormData] = useState({
     parentName: '',
@@ -50,10 +49,10 @@ export default function ClientBooking() {
         setSlots([]);
         setErrorMsg('Unerwartetes Datenformat vom Server.');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to fetch slots', err);
       setSlots([]);
-      setErrorMsg(err.message || 'Fehler beim Laden der Termine.');
+      setErrorMsg(err instanceof Error ? err.message : 'Fehler beim Laden der Termine.');
     } finally {
       setLoading(false);
     }
@@ -89,6 +88,10 @@ export default function ClientBooking() {
       });
 
       if (res.ok) {
+        const data = await res.json();
+        if (data.bookingIds && data.bookingIds.length > 0) {
+          setBookingNumber(`CNL-${10000 + data.bookingIds[0]}`);
+        }
         setBookingSuccess(true);
         setSelectedSlots([]);
         fetchSlots();
@@ -99,6 +102,39 @@ export default function ClientBooking() {
     } catch (err) {
       console.error('Booking error', err);
       alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+    }
+  };
+
+  const handleFetchMyBookings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!myBookingNumber) return;
+    
+    setIsLoadingBookings(true);
+    setMyBookingsError(null);
+    
+    try {
+      const res = await fetch('/api/my-bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingNumber: myBookingNumber
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setMyBookings(data);
+      } else {
+        setMyBookingsError(data.error || 'Fehler beim Laden der Buchungen');
+        setMyBookings(null);
+      }
+    } catch (err) {
+      console.error('Fetch my bookings error', err);
+      setMyBookingsError('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+      setMyBookings(null);
+    } finally {
+      setIsLoadingBookings(false);
     }
   };
 
@@ -122,30 +158,134 @@ export default function ClientBooking() {
         <h1 className="text-4xl md:text-5xl font-serif font-semibold text-brand-900 mb-6">
           Herzlich willkommen bei Caniluma
         </h1>
-        <p className="text-lg text-brand-700 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-lg text-brand-700 max-w-2xl mx-auto leading-relaxed mb-8">
           Tiergestützte Förderung mit Hunden für Kinder und Jugendliche. 
           Ein achtsamer, verlässlicher Rahmen, in dem Kinder gesehen werden dürfen, so wie sie sind.
         </p>
+        
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={() => setActiveView('book')}
+            className={cn(
+              "px-6 py-2 rounded-full font-medium transition-colors",
+              activeView === 'book' 
+                ? "bg-brand-900 text-white" 
+                : "bg-white text-brand-700 border border-brand-200 hover:bg-brand-50"
+            )}
+          >
+            Termin buchen
+          </button>
+          <button
+            onClick={() => setActiveView('my-bookings')}
+            className={cn(
+              "px-6 py-2 rounded-full font-medium transition-colors",
+              activeView === 'my-bookings' 
+                ? "bg-brand-900 text-white" 
+                : "bg-white text-brand-700 border border-brand-200 hover:bg-brand-50"
+            )}
+          >
+            Meine Buchungen
+          </button>
+        </div>
       </div>
 
-      {bookingSuccess ? (
+      {activeView === 'my-bookings' ? (
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-3xl p-8 shadow-sm border border-brand-100 mb-8">
+            <h2 className="text-2xl font-medium mb-6">Buchungen abrufen</h2>
+            <form onSubmit={handleFetchMyBookings} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-700 mb-1">Buchungsnummer</label>
+                <input
+                  type="text"
+                  required
+                  value={myBookingNumber}
+                  onChange={(e) => setMyBookingNumber(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-brand-200 focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none transition-all"
+                  placeholder="z.B. CNL-10001"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isLoadingBookings}
+                className="w-full bg-accent-500 text-white py-3 rounded-xl font-medium hover:bg-accent-600 transition-colors disabled:opacity-50"
+              >
+                {isLoadingBookings ? 'Lade...' : 'Buchungen anzeigen'}
+              </button>
+            </form>
+            
+            {myBookingsError && (
+              <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100">
+                {myBookingsError}
+              </div>
+            )}
+          </div>
+
+          {myBookings && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-medium text-brand-900">Ihre Termine</h3>
+              {myBookings.length === 0 ? (
+                <p className="text-brand-600 bg-white p-6 rounded-2xl border border-brand-100 text-center">
+                  Keine Buchungen gefunden.
+                </p>
+              ) : (
+                myBookings.map((booking: any) => {
+                  const start = parseISO(booking.startTime);
+                  const end = parseISO(booking.endTime);
+                  return (
+                    <div key={booking.id} className="bg-white p-6 rounded-2xl border border-brand-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <div className="font-medium text-brand-900 flex items-center gap-2 mb-1">
+                          {format(start, 'EEEE, d. MMMM yyyy', { locale: de })}
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-brand-100 text-brand-700 font-medium">
+                            {booking.type === 'einzel' ? 'Einzelsetting' : 'Gruppensetting'}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-brand-600 gap-2">
+                          <Clock size={16} />
+                          {format(start, 'HH:mm')} - {format(end, 'HH:mm')} Uhr
+                        </div>
+                      </div>
+                      <div className="text-sm text-brand-500 bg-brand-50 px-4 py-2 rounded-lg border border-brand-100">
+                        Buchungs-Nr: CNL-{10000 + booking.id}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      ) : bookingSuccess ? (
         <div className="bg-white rounded-3xl p-8 md:p-12 shadow-sm text-center max-w-2xl mx-auto border border-brand-100">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 text-green-600 mb-6">
             <CheckCircle2 size={32} />
           </div>
-          <h2 className="text-3xl font-medium mb-4">Termin erfolgreich angefragt!</h2>
-          <p className="text-brand-700 mb-8">
-            Vielen Dank für Ihr Vertrauen. Wir haben Ihre Anfrage erhalten und werden uns in Kürze bei Ihnen melden.
+          <h2 className="text-3xl font-medium mb-4">Termin erfolgreich gebucht!</h2>
+          <p className="text-brand-700 mb-4">
+            Vielen Dank für Ihr Vertrauen. Ihr Termin wurde erfolgreich gebucht und verbindlich für Sie reserviert.
           </p>
-          <button 
-            onClick={() => {
-              setBookingSuccess(false);
-              setFormData({ parentName: '', childName: '', email: '', phone: '', notes: '' });
-            }}
-            className="bg-accent-500 text-white px-8 py-3 rounded-full hover:bg-accent-600 transition-colors"
-          >
-            Weitere Termine ansehen
-          </button>
+          {bookingNumber && (
+            <div className="bg-brand-50 border border-brand-200 rounded-xl p-6 mb-8 inline-block">
+              <p className="text-sm text-brand-600 mb-1">Ihre Buchungsnummer lautet:</p>
+              <p className="text-2xl font-mono font-bold text-brand-900">{bookingNumber}</p>
+              <p className="text-xs text-brand-500 mt-2 max-w-xs mx-auto">
+                Bitte bewahren Sie diese Nummer auf, um Ihre Buchungen später einsehen zu können.
+              </p>
+            </div>
+          )}
+          <div>
+            <button 
+              onClick={() => {
+                setBookingSuccess(false);
+                setBookingNumber(null);
+                setFormData({ parentName: '', childName: '', email: '', phone: '', notes: '' });
+              }}
+              className="bg-accent-500 text-white px-8 py-3 rounded-full hover:bg-accent-600 transition-colors"
+            >
+              Weitere Termine ansehen
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-12">
@@ -169,7 +309,6 @@ export default function ClientBooking() {
                 <p className="text-brand-600 font-medium">Aktuell sind leider keine Termine verfügbar.</p>
                 <p className="text-brand-500 text-sm mt-2">
                   Bitte schauen Sie später wieder vorbei.
-                  <br />(Hinweis für Admins: Loggen Sie sich unter <strong>/admin</strong> ein, um Termine zu erstellen.)
                 </p>
               </div>
             ) : (

@@ -1,7 +1,8 @@
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import path from 'path';
+import { getBookingConfirmationEmail, getCancellationEmail } from './src/utils/emailTemplates.js';
 
 const app = express();
 const PORT = 3000;
@@ -10,9 +11,9 @@ app.use(express.json());
 
 // Initialize Supabase Client
 // We use lazy initialization so the app doesn't crash on startup if keys are missing
-let supabaseClient: any = null;
+let supabaseClient: SupabaseClient | null = null;
 
-function getSupabase(): any {
+function getSupabase(): SupabaseClient {
   if (!supabaseClient) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -84,10 +85,21 @@ app.post('/api/admin/login', async (req, res) => {
     }
 
     res.json({ success: true, token: data.session.access_token });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
+
+app.get('/api/test-schema', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.from('bookings').select('*').limit(1);
+    res.json({ data, error });
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 app.get('/api/slots', async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -106,9 +118,9 @@ app.get('/api/slots', async (req, res) => {
     }));
     
     res.json(formattedSlots);
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error fetching slots:', err);
-    res.status(500).json({ error: err.message || 'Failed to fetch slots' });
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch slots' });
   }
 });
 
@@ -132,9 +144,9 @@ app.post('/api/slots', requireAdmin, async (req, res) => {
     if (error) throw error;
     
     res.json({ ...data, bookedCount: 0 });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error creating slot:', err);
-    res.status(500).json({ error: err.message || 'Failed to create slot' });
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to create slot' });
   }
 });
 
@@ -165,9 +177,9 @@ app.delete('/api/slots/:id', requireAdmin, async (req, res) => {
     if (deleteError) throw deleteError;
     
     res.json({ success: true });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error deleting slot:', err);
-    res.status(500).json({ error: err.message || 'Failed to delete slot' });
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to delete slot' });
   }
 });
 
@@ -194,9 +206,148 @@ app.get('/api/bookings', requireAdmin, async (req, res) => {
     formattedBookings.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
     
     res.json(formattedBookings);
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error fetching bookings:', err);
-    res.status(500).json({ error: err.message || 'Failed to fetch bookings' });
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch bookings' });
+  }
+});
+
+app.delete('/api/bookings/:id', requireAdmin, async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { id } = req.params;
+    
+    // Get the booking details to send cancellation email
+    const { data: booking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('*, slots(startTime, endTime, type)')
+      .eq('id', id)
+      .single();
+      
+    if (fetchError || !booking) {
+      return res.status(404).json({ error: 'Booking not found' });
+    }
+    
+    // Delete the booking
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', id);
+      
+    if (deleteError) throw deleteError;
+    
+    // Check remaining bookings for the slot
+    const { data: slot, error: slotError } = await supabase
+      .from('slots')
+      .select('maxCapacity, bookings(count)')
+      .eq('id', booking.slotId)
+      .single();
+      
+    if (!slotError && slot) {
+      const bookedCount = slot.bookings[0]?.count || 0;
+      if (bookedCount < slot.maxCapacity) {
+        // Update slot to not fully booked
+        await supabase
+          .from('slots')
+          .update({ isBooked: 0 })
+          .eq('id', booking.slotId);
+      }
+    }
+    
+    // Send cancellation email
+    if (process.env.RESEND_API_KEY && booking.email) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const start = new Date(booking.slots.startTime);
+        const end = new Date(booking.slots.endTime);
+        
+        const dateStr = start.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const timeStr = `${start.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`;
+        const typeStr = booking.slots.type === 'einzel' ? 'Einzelsetting' : 'Gruppensetting';
+        
+        const emailHtml = getCancellationEmail(
+          booking.parentName,
+          booking.childName,
+          `CNL-${10000 + parseInt(id, 10)}`,
+          dateStr,
+          timeStr,
+          typeStr
+        );
+        
+        await resend.emails.send({
+          from: 'Caniluma <info@caniluma.de>',
+          replyTo: 'info@caniluma.de',
+          to: booking.email,
+          subject: 'Stornierung Ihres Termins bei Caniluma',
+          html: emailHtml
+        });
+      } catch (emailErr) {
+        console.error('Failed to send cancellation email:', emailErr);
+        // We don't fail the deletion if the email fails
+      }
+    }
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting booking:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to delete booking' });
+  }
+});
+
+app.post('/api/my-bookings', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { bookingNumber } = req.body;
+    
+    if (!bookingNumber) {
+      return res.status(400).json({ error: 'Buchungsnummer ist erforderlich' });
+    }
+    
+    // Parse booking number (e.g., "CNL-10001" -> 1)
+    const match = bookingNumber.match(/CNL-(\d+)/i);
+    if (!match) {
+      return res.status(400).json({ error: 'Ungültiges Buchungsnummer-Format. Bitte verwenden Sie das Format CNL-XXXXX' });
+    }
+    
+    const id = parseInt(match[1], 10) - 10000;
+    
+    // Verify the booking exists to get the email
+    const { data: verifyBooking, error: verifyError } = await supabase
+      .from('bookings')
+      .select('email')
+      .eq('id', id)
+      .single();
+      
+    if (verifyError || !verifyBooking) {
+      return res.status(404).json({ error: 'Keine Buchung mit dieser Nummer gefunden' });
+    }
+    
+    const email = verifyBooking.email;
+    
+    // Fetch all bookings for this email
+    const { data: bookings, error } = await supabase
+      .from('bookings')
+      .select('*, slots(startTime, endTime, type)')
+      .ilike('email', email)
+      .order('createdAt', { ascending: false });
+      
+    if (error) throw error;
+    
+    // Flatten the response
+    const formattedBookings = bookings.map(booking => ({
+      ...booking,
+      startTime: booking.slots.startTime,
+      endTime: booking.slots.endTime,
+      type: booking.slots.type
+    }));
+    
+    // Sort by startTime
+    formattedBookings.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    
+    res.json(formattedBookings);
+  } catch (err) {
+    console.error('Error fetching my bookings:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Fehler beim Laden der Buchungen' });
   }
 });
 
@@ -273,24 +424,18 @@ app.post('/api/bookings', async (req, res) => {
           }).join('') + '</ul>';
         }
 
-        const emailHtml = `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-            <h2 style="color: #4a4a4a;">Buchungsbestätigung</h2>
-            <p>Hallo ${parentName},</p>
-            <p>vielen Dank für Ihre Buchungsanfrage bei Caniluma für <strong>${childName}</strong>.</p>
-            <p>Wir haben Ihre Anfrage für folgende Termine erhalten:</p>
-            ${slotsHtml}
-            <p>Wir werden uns in Kürze bei Ihnen melden, um die Termine final zu bestätigen.</p>
-            <br/>
-            <p>Mit freundlichen Grüßen,</p>
-            <p>Ihr Caniluma Team</p>
-          </div>
-        `;
+        const emailHtml = getBookingConfirmationEmail(
+          parentName,
+          childName,
+          `CNL-${10000 + bookingIds[0]}`,
+          slotsHtml
+        );
 
         await resend.emails.send({
-          from: 'Caniluma <buchung@caniluma.de>', // Update this to your verified domain in Resend
+          from: 'Caniluma <info@caniluma.de>',
+          replyTo: 'info@caniluma.de',
           to: [email],
-          subject: 'Ihre Buchungsanfrage bei Caniluma',
+          subject: 'Ihre Terminbestätigung bei Caniluma',
           html: emailHtml
         });
         
@@ -304,14 +449,14 @@ app.post('/api/bookings', async (req, res) => {
     }
 
     res.json({ success: true, bookingIds });
-  } catch (err: any) {
+  } catch (err) {
     console.error('Error creating booking:', err);
-    res.status(400).json({ error: err.message || 'Booking failed' });
+    res.status(400).json({ error: err instanceof Error ? err.message : 'Booking failed' });
   }
 });
 
 // Global error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled Express error:', err);
   res.status(500).json({ error: 'Internal Server Error: ' + (err.message || String(err)) });
 });

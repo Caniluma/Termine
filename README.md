@@ -1,20 +1,38 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Caniluma Terminbuchung
 
-# Run and deploy your AI Studio app
+Terminbuchungs-App für Caniluma mit öffentlicher Buchungsseite, Admin-Verwaltung, Supabase-Backend und E-Mail-Versand über Resend.
 
-This contains everything you need to run your app locally.
+## Verwendeter Stack
 
-View your app in AI Studio: https://ai.studio/apps/34574d67-c123-429c-901f-395e960d3e63
+- React + Vite
+- TypeScript
+- Express
+- Supabase
+- Resend
+- Tailwind CSS v4
 
-## Run Locally
+## Lokale Entwicklung
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
+1. Abhängigkeiten installieren
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Umgebungsvariablen anlegen
+   `.env` oder `.env.local` auf Basis von `.env.example` erstellen
+3. Entwicklungsserver starten
    `npm run dev`
+
+Die App läuft standardmäßig unter `http://localhost:3000`.
+
+## Benötigte Umgebungsvariablen
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ADMIN_EMAIL`
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+- `EMAIL_REPLY_TO`
+
+## Hinweise
+
+- Die SQL-Struktur liegt in `supabase/schema.sql`.
+- Antworten auf E-Mails gehen nur dann sicher an die gewünschte Adresse, wenn `EMAIL_REPLY_TO` gesetzt ist.
+- Für den produktiven Versand muss die Absender-Domain in Resend verifiziert sein.

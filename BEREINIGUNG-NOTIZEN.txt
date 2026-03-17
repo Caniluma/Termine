@@ -1,0 +1,17 @@
+Bereinigung und Korrekturen:
+- AI-Studio-/Export-Reste entfernt: dev-dist, metadata.json, check-schema.js, fetch-schema.js, download.js, resize.js
+- Ungenutzte Abhängigkeiten entfernt: @google/genai, better-sqlite3
+- README und .env.example an reales Projekt angepasst
+- Vite-Konfiguration von ungenutzten Gemini-/AI-Studio-Fragmenten bereinigt
+- Buchungserfolg im Frontend sprachlich korrigiert: aus Anfrage wurde verbindliche Buchung
+- Admin-Formular setzt Datum/Typ nach dem Erstellen eines Slots wieder sauber zurück
+- E-Mail-Versand korrigiert:
+  - Betreff jetzt Terminbestätigung statt Buchungsanfrage
+  - reply_to eingeführt
+  - EMAIL_FROM und EMAIL_REPLY_TO über Umgebungsvariablen konfigurierbar
+
+Bekannte fachliche Punkte, nicht automatisch geändert:
+- Der Endpunkt /api/my-bookings liefert alle Buchungen zu einer E-Mail-Adresse, sobald eine gültige Buchungsnummer bekannt ist.
+  Das kann datenschutzrechtlich zu offen sein, falls mehrere Buchungen unter derselben Mailadresse liegen.
+- Eine echte Build-Prüfung war hier nicht vollständig möglich, weil im Offline-Container kein natives better-sqlite3 gebaut werden konnte.
+  Die Abhängigkeit war aber ungenutzt und wurde deshalb entfernt.
