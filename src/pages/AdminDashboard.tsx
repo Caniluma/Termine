@@ -36,7 +36,8 @@ export default function AdminDashboard() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [activeTab, setActiveTab] = useState<'slots' | 'bookings'>('slots');
-  
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
   // New slot form
   const [newDate, setNewDate] = useState('');
   const [newStartTime, setNewStartTime] = useState('');
@@ -89,20 +90,54 @@ export default function AdminDashboard() {
   };
 
   const fetchSlots = async () => {
-    const res = await fetch('/api/slots');
-    setSlots(await res.json());
+    try {
+      const res = await fetch('/api/slots');
+      if (!res.ok) {
+        let errData = { error: `HTTP error! status: ${res.status}` };
+        try { errData = await res.json(); } catch (e) {}
+        throw new Error(errData.error || `HTTP error! status: ${res.status}`);
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setSlots(data);
+        setErrorMsg(null);
+      } else {
+        setSlots([]);
+        setErrorMsg('Unerwartetes Datenformat vom Server.');
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch slots', err);
+      setSlots([]);
+      setErrorMsg(err.message || 'Fehler beim Laden der Termine.');
+    }
   };
 
   const fetchBookings = async (authToken = token) => {
     if (!authToken) return;
-    const res = await fetch('/api/bookings', {
-      headers: { 'Authorization': `Bearer ${authToken}` }
-    });
-    if (res.status === 401) {
-      handleLogout();
-      return;
+    try {
+      const res = await fetch('/api/bookings', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.status === 401) {
+        handleLogout();
+        return;
+      }
+      if (!res.ok) {
+        let errData = { error: `HTTP error! status: ${res.status}` };
+        try { errData = await res.json(); } catch (e) {}
+        throw new Error(errData.error || `HTTP error! status: ${res.status}`);
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setBookings(data);
+      } else {
+        setBookings([]);
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch bookings', err);
+      setBookings([]);
+      setErrorMsg(err.message || 'Fehler beim Laden der Buchungen.');
     }
-    setBookings(await res.json());
   };
 
   const handleCreateSlot = async (e: React.FormEvent) => {
@@ -215,6 +250,16 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {errorMsg && (
+        <div className="bg-red-50 rounded-2xl p-6 mb-8 text-center border border-red-100">
+          <p className="text-red-600 font-medium">Fehler: {errorMsg}</p>
+          <p className="text-red-500 text-sm mt-2">
+            Bitte überprüfen Sie die Datenbank-Verbindung (Supabase) und die Umgebungsvariablen in Vercel.
+            <br />Haben Sie das SQL-Skript (`supabase/schema.sql`) in Ihrem Supabase-Projekt ausgeführt?
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-4 mb-8 border-b border-brand-200 pb-4">
         <button 
           onClick={() => setActiveTab('slots')}
@@ -295,7 +340,10 @@ export default function AdminDashboard() {
               <h2 className="text-xl font-medium mb-6">Alle Termine</h2>
               <div className="space-y-3">
                 {slots.length === 0 ? (
-                  <p className="text-brand-500 text-center py-8">Keine Termine angelegt.</p>
+                  <div className="text-center py-8">
+                    <p className="text-brand-500 font-medium">Keine Termine angelegt.</p>
+                    <p className="text-brand-400 text-sm mt-2">Nutzen Sie das Formular links, um neue Termine zu erstellen.</p>
+                  </div>
                 ) : (
                   slots.map(slot => {
                     const start = parseISO(slot.startTime);

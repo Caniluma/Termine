@@ -19,6 +19,7 @@ export default function ClientBooking() {
   const [selectedSlots, setSelectedSlots] = useState<Slot[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     parentName: '',
@@ -36,18 +37,23 @@ export default function ClientBooking() {
     try {
       const res = await fetch('/api/slots');
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+        let errData = { error: `HTTP error! status: ${res.status}` };
+        try { errData = await res.json(); } catch (e) {}
+        throw new Error(errData.error || `HTTP error! status: ${res.status}`);
       }
       const data = await res.json();
       if (Array.isArray(data)) {
         setSlots(data);
+        setErrorMsg(null);
       } else {
         console.error('Expected array of slots, got:', data);
         setSlots([]);
+        setErrorMsg('Unerwartetes Datenformat vom Server.');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch slots', err);
       setSlots([]);
+      setErrorMsg(err.message || 'Fehler beim Laden der Termine.');
     } finally {
       setLoading(false);
     }
@@ -149,10 +155,22 @@ export default function ClientBooking() {
               <Calendar className="text-accent-500" /> Verfügbare Termine
             </h2>
             
-            {slots.length === 0 ? (
+            {errorMsg ? (
+              <div className="bg-red-50 rounded-2xl p-8 text-center border border-red-100">
+                <p className="text-red-600 font-medium">Fehler: {errorMsg}</p>
+                <p className="text-red-500 text-sm mt-2">
+                  Bitte überprüfen Sie die Datenbank-Verbindung (Supabase) und die Umgebungsvariablen in Vercel.
+                  <br />Haben Sie das SQL-Skript (`supabase/schema.sql`) in Ihrem Supabase-Projekt ausgeführt?
+                </p>
+              </div>
+            ) : slots.length === 0 ? (
               <div className="bg-white rounded-2xl p-8 text-center border border-brand-100">
                 <Heart className="mx-auto text-brand-300 mb-4" size={32} />
-                <p className="text-brand-600">Aktuell sind leider keine Termine verfügbar. Bitte schauen Sie später wieder vorbei.</p>
+                <p className="text-brand-600 font-medium">Aktuell sind leider keine Termine verfügbar.</p>
+                <p className="text-brand-500 text-sm mt-2">
+                  Bitte schauen Sie später wieder vorbei.
+                  <br />(Hinweis für Admins: Loggen Sie sich unter <strong>/admin</strong> ein, um Termine zu erstellen.)
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
