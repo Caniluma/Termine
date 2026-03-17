@@ -310,6 +310,12 @@ app.post('/api/bookings', async (req, res) => {
   }
 });
 
+// Global error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled Express error:', err);
+  res.status(500).json({ error: 'Internal Server Error: ' + (err.message || String(err)) });
+});
+
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const viteModule = 'vite';
