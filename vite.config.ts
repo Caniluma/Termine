@@ -19,6 +19,7 @@ export default defineConfig(({mode}) => {
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
+          start_url: '/',
           icons: [
             {
               src: 'https://caniluma.de/wp-content/uploads/2026/03/Caniluma-App-Icon.png',
