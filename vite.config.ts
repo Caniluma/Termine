@@ -16,23 +16,24 @@ export default defineConfig(({mode}) => {
           name: 'Caniluma Tiergestützte Förderung',
           short_name: 'Caniluma',
           description: 'Tiergestützte Förderung mit Hunden für Kinder und Jugendliche.',
-          theme_color: '#ffffff',
-          background_color: '#ffffff',
+          theme_color: '#fdf8f6',
+          background_color: '#fdf8f6',
           display: 'standalone',
           start_url: '/',
+          lang: 'de',
           icons: [
             {
-              src: 'https://caniluma.de/wp-content/uploads/2026/03/Caniluma-App-Icon.png',
+              src: '/icon-192.png',
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: 'https://caniluma.de/wp-content/uploads/2026/03/Caniluma-App-Icon.png',
+              src: '/icon.png',
               sizes: '512x512',
               type: 'image/png'
             },
             {
-              src: 'https://caniluma.de/wp-content/uploads/2026/03/Caniluma-App-Icon.png',
+              src: '/icon.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'

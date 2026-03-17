@@ -6,11 +6,13 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import ClientBooking from './pages/ClientBooking';
 import AdminDashboard from './pages/AdminDashboard';
+import { InstallPWA } from './components/InstallPWA';
 
 export default function App() {
   return (
     <Router>
       <div className="min-h-screen flex flex-col">
+        <InstallPWA />
         <main className="flex-grow">
           <Routes>
             <Route path="/" element={<ClientBooking />} />
