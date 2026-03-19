@@ -30,6 +30,15 @@ export default function ClientBooking() {
 
   useEffect(() => {
     fetchSlots();
+    
+    // Check for booking number in URL
+    const params = new URLSearchParams(window.location.search);
+    const bookingParam = params.get('booking');
+    if (bookingParam) {
+      setMyBookingNumber(bookingParam);
+      setActiveView('my-bookings');
+      fetchMyBookings(bookingParam);
+    }
   }, []);
 
   const fetchSlots = async () => {
@@ -105,9 +114,8 @@ export default function ClientBooking() {
     }
   };
 
-  const handleFetchMyBookings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!myBookingNumber) return;
+  const fetchMyBookings = async (bookingNum: string) => {
+    if (!bookingNum) return;
     
     setIsLoadingBookings(true);
     setMyBookingsError(null);
@@ -117,7 +125,7 @@ export default function ClientBooking() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          bookingNumber: myBookingNumber
+          bookingNumber: bookingNum
         })
       });
       
@@ -136,6 +144,11 @@ export default function ClientBooking() {
     } finally {
       setIsLoadingBookings(false);
     }
+  };
+
+  const handleFetchMyBookings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await fetchMyBookings(myBookingNumber);
   };
 
   if (loading) {

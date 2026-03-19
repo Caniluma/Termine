@@ -120,7 +120,7 @@ export const getBookingConfirmationEmail = (
           <p>Wir freuen uns darauf, Sie bei Caniluma begrüßen zu dürfen.</p>
           
           <div class="btn-wrap">
-            <a href="https://caniluma.de" class="btn">Zur Caniluma Website</a>
+            <a href="https://termine.caniluma.de/?booking=${bookingNumber}" class="btn">Zu meiner Buchungsübersicht</a>
           </div>
         </div>
 
@@ -244,7 +244,7 @@ export const getCancellationEmail = (
           <p>Falls Sie Fragen haben oder einen Ersatztermin vereinbaren möchten, antworten Sie gerne auf diese E-Mail oder buchen Sie einen neuen Termin über unsere App.</p>
           
           <div class="btn-wrap">
-            <a href="https://termine-theta.vercel.app/" class="btn">Jetzt neuen Termin buchen</a>
+            <a href="https://termine.caniluma.de/" class="btn">Jetzt neuen Termin buchen</a>
           </div>
         </div>
 
