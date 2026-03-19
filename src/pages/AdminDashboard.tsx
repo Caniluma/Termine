@@ -136,10 +136,8 @@ export default function AdminDashboard() {
       });
       if (res.ok) {
         fetchSlots();
-        setNewDate('');
         setNewStartTime('');
         setNewEndTime('');
-        setNewType('einzel');
       } else if (res.status === 401) {
         handleLogout();
       }

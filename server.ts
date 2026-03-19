@@ -2,6 +2,7 @@ import express from 'express';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import path from 'path';
+import jwt from 'jsonwebtoken';
 import { getBookingConfirmationEmail, getCancellationEmail } from './src/utils/emailTemplates.js';
 
 const app = express();
@@ -36,60 +37,67 @@ const requireAdmin = async (req: express.Request, res: express.Response, next: e
   }
 
   const token = authHeader.split(' ')[1];
-  const supabase = getSupabase();
+  const jwtSecret = process.env.SUPABASE_SERVICE_ROLE_KEY || 'fallback_secret';
 
   try {
-    // Verify the token with Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    
-    if (error || !user) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
+    const decoded = jwt.verify(token, jwtSecret);
+    if (typeof decoded === 'object' && decoded.role === 'admin') {
+      next();
+    } else {
+      return res.status(401).json({ error: 'Invalid token role' });
     }
-    
-    next();
   } catch (err) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: 'Unauthorized or expired token' });
   }
 };
 
 // API Routes
 app.post('/api/admin/login', async (req, res) => {
   const { password } = req.body;
-  // Admin email can be configured via Vercel Environment Variables
-  const email = process.env.ADMIN_EMAIL || 'info@caniluma.de';
   
   if (!password) {
     return res.status(400).json({ error: 'Passwort wird benötigt' });
   }
 
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = getSupabase();
     
-    if (!supabaseUrl || !supabaseKey) {
-      return res.status(500).json({ error: 'Supabase credentials not configured' });
+    // Check 'Settings' table
+    let { data: settingsData, error } = await supabase.from('Settings').select('*');
+    
+    // If error, try 'settings' table
+    if (error || !settingsData) {
+      const res2 = await supabase.from('settings').select('*');
+      settingsData = res2.data;
     }
 
-    // Create a temporary client that doesn't persist sessions on the server
-    const authClient = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false }
-    });
-
-    const { data, error } = await authClient.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error) {
-      return res.status(401).json({ error: 'Ungültige E-Mail oder Passwort' });
+    if (!settingsData || settingsData.length === 0) {
+      return res.status(500).json({ error: 'Konfigurationstabelle nicht gefunden oder leer' });
     }
 
-    res.json({ success: true, token: data.session.access_token });
+    // Find password setting
+    const pwdRow = settingsData.find(row => {
+      const k = String(row.key || row.Key || '').toLowerCase();
+      return k.includes('password') || k.includes('passwort');
+    });
+
+    if (!pwdRow) {
+      return res.status(500).json({ error: 'Passwort-Eintrag in der Datenbank nicht gefunden' });
+    }
+
+    const storedPassword = String(pwdRow.value || pwdRow.Value || '');
+
+    if (password === storedPassword) {
+      const jwtSecret = process.env.SUPABASE_SERVICE_ROLE_KEY || 'fallback_secret';
+      const token = jwt.sign({ role: 'admin' }, jwtSecret, { expiresIn: '24h' });
+      return res.json({ success: true, token });
+    } else {
+      return res.status(401).json({ error: 'Falsches Passwort' });
+    }
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
 });
-
 app.get('/api/test-schema', async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -275,8 +283,7 @@ app.delete('/api/bookings/:id', requireAdmin, async (req, res) => {
         );
         
         await resend.emails.send({
-          from: 'Caniluma <info@caniluma.de>',
-          replyTo: 'info@caniluma.de',
+          from: 'Caniluma <info@termine.caniluma.de>',
           to: booking.email,
           subject: 'Stornierung Ihres Termins bei Caniluma',
           html: emailHtml
@@ -432,10 +439,9 @@ app.post('/api/bookings', async (req, res) => {
         );
 
         await resend.emails.send({
-          from: 'Caniluma <info@caniluma.de>',
-          replyTo: 'info@caniluma.de',
+          from: 'Caniluma <info@termine.caniluma.de>',
           to: [email],
-          subject: 'Ihre Terminbestätigung bei Caniluma',
+          subject: 'Ihre Buchungsanfrage bei Caniluma',
           html: emailHtml
         });
         

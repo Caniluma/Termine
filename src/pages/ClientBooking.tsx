@@ -261,9 +261,9 @@ export default function ClientBooking() {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 text-green-600 mb-6">
             <CheckCircle2 size={32} />
           </div>
-          <h2 className="text-3xl font-medium mb-4">Termin erfolgreich gebucht!</h2>
+          <h2 className="text-3xl font-medium mb-4">Termin erfolgreich angefragt!</h2>
           <p className="text-brand-700 mb-4">
-            Vielen Dank für Ihr Vertrauen. Ihr Termin wurde erfolgreich gebucht und verbindlich für Sie reserviert.
+            Vielen Dank für Ihr Vertrauen. Wir haben Ihre Anfrage erhalten und werden uns in Kürze bei Ihnen melden.
           </p>
           {bookingNumber && (
             <div className="bg-brand-50 border border-brand-200 rounded-xl p-6 mb-8 inline-block">
@@ -309,6 +309,7 @@ export default function ClientBooking() {
                 <p className="text-brand-600 font-medium">Aktuell sind leider keine Termine verfügbar.</p>
                 <p className="text-brand-500 text-sm mt-2">
                   Bitte schauen Sie später wieder vorbei.
+                  <br />(Hinweis für Admins: Loggen Sie sich unter <strong>/admin</strong> ein, um Termine zu erstellen.)
                 </p>
               </div>
             ) : (
@@ -410,7 +411,7 @@ export default function ClientBooking() {
               )}
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-brand-700 mb-1">Name eines Elternteils *</label>
+                  <label className="block text-sm font-medium text-brand-700 mb-1">Name *</label>
                   <input 
                     required
                     type="text"

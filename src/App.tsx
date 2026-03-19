@@ -24,7 +24,7 @@ export default function App() {
           <div className="max-w-4xl mx-auto px-4 flex justify-between items-center">
             <p>&copy; {new Date().getFullYear()} Caniluma. Alle Rechte vorbehalten.</p>
             <Link to="/admin" className="hover:text-accent-500 transition-colors">
-              Admin
+              Admin Login
             </Link>
           </div>
         </footer>
