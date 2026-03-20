@@ -342,32 +342,28 @@ app.post('/api/my-bookings', async (req, res) => {
       return res.status(400).json({ error: 'Buchungsnummer ist erforderlich' });
     }
     
-    // Parse booking number (e.g., "CNL-10001" -> 1)
+    // Parse booking number (e.g., "CNL-10001")
     const match = bookingNumber.match(/CNL-(\d+)/i);
     if (!match) {
       return res.status(400).json({ error: 'Ungültiges Buchungsnummer-Format. Bitte verwenden Sie das Format CNL-XXXXX' });
     }
     
-    const id = parseInt(match[1], 10) - 10000;
-    
-    // Verify the booking exists to get the email
-    const { data: verifyBooking, error: verifyError } = await supabase
-      .from('bookings')
-      .select('email')
-      .eq('id', id)
+    // Verify the client exists
+    const { data: client, error: verifyError } = await supabase
+      .from('clients')
+      .select('id, email')
+      .ilike('clientNumber', bookingNumber.trim())
       .single();
       
-    if (verifyError || !verifyBooking) {
-      return res.status(404).json({ error: 'Keine Buchung mit dieser Nummer gefunden' });
+    if (verifyError || !client) {
+      return res.status(404).json({ error: 'Keine Buchungen mit dieser Nummer gefunden' });
     }
     
-    const email = verifyBooking.email;
-    
-    // Fetch all bookings for this email
+    // Fetch all bookings for this client
     const { data: bookings, error } = await supabase
       .from('bookings')
       .select('*, slots(startTime, endTime, type)')
-      .ilike('email', email)
+      .eq('clientId', client.id)
       .order('createdAt', { ascending: false });
       
     if (error) throw error;
@@ -390,6 +386,57 @@ app.post('/api/my-bookings', async (req, res) => {
   }
 });
 
+app.post('/api/forgot-booking-number', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'E-Mail ist erforderlich' });
+    }
+
+    const { data: client } = await supabase
+      .from('clients')
+      .select('clientNumber, parentName')
+      .ilike('email', email.trim())
+      .single();
+
+    if (client && process.env.RESEND_API_KEY) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const emailHtml = `
+          <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto; color: #1a1a1a;">
+            <h2 style="color: #4a3b32;">Ihre Zugangsnummer bei Caniluma</h2>
+            <p>Hallo ${client.parentName},</p>
+            <p>Sie haben Ihre Zugangsnummer angefordert. Mit dieser Nummer können Sie jederzeit Ihre gebuchten Termine einsehen.</p>
+            <div style="background-color: #fdf8f6; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center; border: 1px solid #f5ebe6;">
+              <p style="margin: 0; color: #666;">Ihre feste Zugangsnummer:</p>
+              <p style="font-size: 24px; font-weight: bold; color: #1a1a1a; margin: 10px 0 0 0;">${client.clientNumber}</p>
+            </div>
+            <p>Liebe Grüße,<br>Ihr Caniluma Team</p>
+          </div>
+        `;
+        
+        await resend.emails.send({
+          from: 'Caniluma <info@termine.caniluma.de>',
+          to: [email],
+          subject: 'Ihre Zugangsnummer bei Caniluma',
+          html: emailHtml
+        });
+        console.log('Forgot booking number email sent to', email);
+      } catch (emailErr) {
+        console.error('Failed to send forgot booking number email:', emailErr);
+      }
+    }
+
+    // Always return success for security (prevent email enumeration)
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error in forgot-booking-number:', err);
+    res.status(500).json({ error: 'Ein Fehler ist aufgetreten' });
+  }
+});
+
 app.post('/api/bookings', async (req, res) => {
   try {
     const supabase = getSupabase();
@@ -402,6 +449,37 @@ app.post('/api/bookings', async (req, res) => {
     }
 
     const bookingIds = [];
+    
+    // Find or create client
+    let { data: client } = await supabase
+      .from('clients')
+      .select('*')
+      .ilike('email', email.trim())
+      .single();
+
+    let clientId;
+    let clientNumber;
+
+    if (!client) {
+      // Create new client with a temporary number
+      const tempNumber = 'TEMP-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+      const { data: newClient, error: clientErr } = await supabase
+        .from('clients')
+        .insert([{ email: email.trim(), parentName, childName, phone, clientNumber: tempNumber }])
+        .select()
+        .single();
+        
+      if (clientErr) throw new Error('Fehler beim Erstellen des Kundenprofils: ' + clientErr.message);
+      
+      clientId = newClient.id;
+      clientNumber = `CNL-${10000 + clientId}`;
+      
+      // Update with final number
+      await supabase.from('clients').update({ clientNumber }).eq('id', clientId);
+    } else {
+      clientId = client.id;
+      clientNumber = client.clientNumber;
+    }
     
     // Process each booking sequentially to ensure capacity checks are accurate
     for (const slotId of idsToBook) {
@@ -422,7 +500,7 @@ app.post('/api/bookings', async (req, res) => {
       // 2. Insert booking
       const { data: booking, error: insertError } = await supabase
         .from('bookings')
-        .insert([{ slotId, parentName, childName, email, phone, notes: notes || '' }])
+        .insert([{ slotId, parentName, childName, email: email.trim(), phone, notes: notes || '', clientId }])
         .select()
         .single();
         
@@ -466,7 +544,7 @@ app.post('/api/bookings', async (req, res) => {
         const emailHtml = getBookingConfirmationEmail(
           parentName,
           childName,
-          `CNL-${10000 + bookingIds[0]}`,
+          clientNumber,
           slotsHtml
         );
 
@@ -486,7 +564,7 @@ app.post('/api/bookings', async (req, res) => {
           email,
           phone,
           notes,
-          `CNL-${10000 + bookingIds[0]}`,
+          clientNumber,
           slotsHtml
         );
 
@@ -507,7 +585,7 @@ app.post('/api/bookings', async (req, res) => {
       console.log('RESEND_API_KEY not set, skipping email confirmation');
     }
 
-    res.json({ success: true, bookingIds });
+    res.json({ success: true, bookingIds, clientNumber });
   } catch (err) {
     console.error('Error creating booking:', err);
     res.status(400).json({ error: err instanceof Error ? err.message : 'Booking failed' });

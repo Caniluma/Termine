@@ -20,6 +20,12 @@ export default function ClientBooking() {
   const [myBookingsError, setMyBookingsError] = useState<string | null>(null);
   const [isLoadingBookings, setIsLoadingBookings] = useState(false);
 
+  // Forgot Number state
+  const [isForgotMode, setIsForgotMode] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [isSendingForgot, setIsSendingForgot] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
+
   const [formData, setFormData] = useState({
     parentName: '',
     childName: '',
@@ -98,7 +104,9 @@ export default function ClientBooking() {
 
       if (res.ok) {
         const data = await res.json();
-        if (data.bookingIds && data.bookingIds.length > 0) {
+        if (data.clientNumber) {
+          setBookingNumber(data.clientNumber);
+        } else if (data.bookingIds && data.bookingIds.length > 0) {
           setBookingNumber(`CNL-${10000 + data.bookingIds[0]}`);
         }
         setBookingSuccess(true);
@@ -149,6 +157,25 @@ export default function ClientBooking() {
   const handleFetchMyBookings = async (e: React.FormEvent) => {
     e.preventDefault();
     await fetchMyBookings(myBookingNumber);
+  };
+
+  const handleForgotNumber = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSendingForgot(true);
+    try {
+      await fetch('/api/forgot-booking-number', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail })
+      });
+      // Always show success to prevent email enumeration
+      setForgotSuccess(true);
+    } catch (err) {
+      console.error(err);
+      setForgotSuccess(true);
+    } finally {
+      setIsSendingForgot(false);
+    }
   };
 
   if (loading) {
@@ -205,32 +232,102 @@ export default function ClientBooking() {
       {activeView === 'my-bookings' ? (
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-3xl p-8 shadow-sm border border-brand-100 mb-8">
-            <h2 className="text-2xl font-medium mb-6">Buchungen abrufen</h2>
-            <form onSubmit={handleFetchMyBookings} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-brand-700 mb-1">Buchungsnummer</label>
-                <input
-                  type="text"
-                  required
-                  value={myBookingNumber}
-                  onChange={(e) => setMyBookingNumber(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-brand-200 focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none transition-all"
-                  placeholder="z.B. CNL-10001"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isLoadingBookings}
-                className="w-full bg-accent-500 text-white py-3 rounded-xl font-medium hover:bg-accent-600 transition-colors disabled:opacity-50"
-              >
-                {isLoadingBookings ? 'Lade...' : 'Buchungen anzeigen'}
-              </button>
-            </form>
-            
-            {myBookingsError && (
-              <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100">
-                {myBookingsError}
-              </div>
+            {isForgotMode ? (
+              <>
+                <h2 className="text-2xl font-medium mb-6">Zugangsnummer anfordern</h2>
+                {forgotSuccess ? (
+                  <div className="text-center py-4">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 text-green-600 mb-4">
+                      <CheckCircle2 size={24} />
+                    </div>
+                    <p className="text-brand-700 mb-6">
+                      Falls wir Buchungen zu dieser E-Mail-Adresse gefunden haben, haben wir Ihnen Ihre Zugangsnummer soeben zugesendet.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setIsForgotMode(false);
+                        setForgotSuccess(false);
+                        setForgotEmail('');
+                      }}
+                      className="text-accent-600 font-medium hover:text-accent-700"
+                    >
+                      Zurück zur Eingabe
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgotNumber} className="space-y-4">
+                    <p className="text-brand-600 text-sm mb-4">
+                      Geben Sie die E-Mail-Adresse ein, mit der Sie gebucht haben. Wir senden Ihnen Ihre feste Zugangsnummer umgehend zu.
+                    </p>
+                    <div>
+                      <label className="block text-sm font-medium text-brand-700 mb-1">E-Mail-Adresse</label>
+                      <input
+                        type="email"
+                        required
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl border border-brand-200 focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none transition-all"
+                        placeholder="ihre@email.de"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isSendingForgot}
+                      className="w-full bg-accent-500 text-white py-3 rounded-xl font-medium hover:bg-accent-600 transition-colors disabled:opacity-50"
+                    >
+                      {isSendingForgot ? 'Sende...' : 'Zugangsnummer anfordern'}
+                    </button>
+                    <div className="text-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsForgotMode(false)}
+                        className="text-sm text-brand-500 hover:text-brand-700"
+                      >
+                        Abbrechen
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-medium mb-6">Buchungen abrufen</h2>
+                <form onSubmit={handleFetchMyBookings} className="space-y-4">
+                  <div>
+                    <div className="flex justify-between items-end mb-1">
+                      <label className="block text-sm font-medium text-brand-700">Zugangsnummer</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsForgotMode(true)}
+                        className="text-xs text-accent-600 hover:text-accent-700 font-medium"
+                      >
+                        Nummer vergessen?
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={myBookingNumber}
+                      onChange={(e) => setMyBookingNumber(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl border border-brand-200 focus:ring-2 focus:ring-accent-500 focus:border-accent-500 outline-none transition-all"
+                      placeholder="z.B. CNL-10001"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isLoadingBookings}
+                    className="w-full bg-accent-500 text-white py-3 rounded-xl font-medium hover:bg-accent-600 transition-colors disabled:opacity-50"
+                  >
+                    {isLoadingBookings ? 'Lade...' : 'Buchungen anzeigen'}
+                  </button>
+                </form>
+                
+                {myBookingsError && (
+                  <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-xl text-sm border border-red-100">
+                    {myBookingsError}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -260,7 +357,7 @@ export default function ClientBooking() {
                         </div>
                       </div>
                       <div className="text-sm text-brand-500 bg-brand-50 px-4 py-2 rounded-lg border border-brand-100">
-                        Buchungs-Nr: CNL-{10000 + booking.id}
+                        Termin-ID: {booking.id}
                       </div>
                     </div>
                   );
@@ -280,10 +377,10 @@ export default function ClientBooking() {
           </p>
           {bookingNumber && (
             <div className="bg-brand-50 border border-brand-200 rounded-xl p-6 mb-8 inline-block">
-              <p className="text-sm text-brand-600 mb-1">Ihre Buchungsnummer lautet:</p>
+              <p className="text-sm text-brand-600 mb-1">Ihre feste Zugangsnummer lautet:</p>
               <p className="text-2xl font-mono font-bold text-brand-900">{bookingNumber}</p>
               <p className="text-xs text-brand-500 mt-2 max-w-xs mx-auto">
-                Bitte bewahren Sie diese Nummer auf, um Ihre Buchungen später einsehen zu können.
+                Bitte bewahren Sie diese Nummer auf, um jederzeit alle Ihre Termine einsehen zu können.
               </p>
             </div>
           )}
