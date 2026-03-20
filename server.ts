@@ -108,7 +108,39 @@ app.get('/api/test-schema', async (req, res) => {
   }
 });
 
+// Get slots for clients (only future slots, > 24h away)
 app.get('/api/slots', async (req, res) => {
+  try {
+    const supabase = getSupabase();
+    
+    // Calculate timestamp for 24 hours from now
+    const tomorrow = new Date();
+    tomorrow.setHours(tomorrow.getHours() + 24);
+    const tomorrowIsoString = tomorrow.toISOString();
+    
+    const { data: slots, error } = await supabase
+      .from('slots')
+      .select('*, bookings(count)')
+      .gte('startTime', tomorrowIsoString)
+      .order('startTime', { ascending: true });
+      
+    if (error) throw error;
+    
+    // Format the response to match the expected frontend structure
+    const formattedSlots = slots.map(slot => ({
+      ...slot,
+      bookedCount: slot.bookings[0]?.count || 0
+    }));
+    
+    res.json(formattedSlots);
+  } catch (err) {
+    console.error('Error fetching slots:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch slots' });
+  }
+});
+
+// Get ALL slots for admin (including past ones)
+app.get('/api/admin/slots', requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
     
@@ -127,8 +159,8 @@ app.get('/api/slots', async (req, res) => {
     
     res.json(formattedSlots);
   } catch (err) {
-    console.error('Error fetching slots:', err);
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch slots' });
+    console.error('Error fetching admin slots:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to fetch admin slots' });
   }
 });
 

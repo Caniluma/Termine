@@ -27,10 +27,10 @@ export default function AdminDashboard() {
     if (savedToken) {
       setToken(savedToken);
       setIsAuthenticated(true);
-      fetchSlots();
+      fetchSlots(savedToken);
       fetchBookings(savedToken);
     } else {
-      fetchSlots();
+      fetchSlots(null);
     }
   }, []);
 
@@ -48,7 +48,7 @@ export default function AdminDashboard() {
         setIsAuthenticated(true);
         setToken(data.token);
         localStorage.setItem('adminToken', data.token);
-        fetchSlots();
+        fetchSlots(data.token);
         fetchBookings(data.token);
         setLoginError('');
       } else {
@@ -67,9 +67,14 @@ export default function AdminDashboard() {
     localStorage.removeItem('adminToken');
   };
 
-  const fetchSlots = async () => {
+  const fetchSlots = async (authToken = token) => {
+    if (!authToken) return;
     try {
-      const res = await fetch('/api/slots');
+      const res = await fetch('/api/admin/slots', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
       if (!res.ok) {
         let errData = { error: `HTTP error! status: ${res.status}` };
         try { errData = await res.json(); } catch (e) {}
@@ -77,7 +82,18 @@ export default function AdminDashboard() {
       }
       const data = await res.json();
       if (Array.isArray(data)) {
-        setSlots(data);
+        // Filter out past slots that have NO bookings
+        const now = new Date();
+        const filteredSlots = data.filter(slot => {
+          const slotEnd = new Date(slot.endTime);
+          const isPast = slotEnd < now;
+          const hasBookings = slot.bookedCount > 0;
+          
+          // Keep if it's in the future OR if it's in the past but has bookings
+          return !isPast || hasBookings;
+        });
+        
+        setSlots(filteredSlots);
         setErrorMsg(null);
       } else {
         setSlots([]);
