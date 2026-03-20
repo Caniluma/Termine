@@ -350,14 +350,15 @@ export default function ClientBooking() {
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex flex-col gap-1">
-                          <div className={cn("font-medium text-lg", isBooked ? "text-brand-600" : "")}>
+                          <div className={cn("font-medium text-lg", isBooked ? "text-brand-600 line-through" : "")}>
                             {format(start, 'EEEE, d. MMMM yyyy', { locale: de })}
                           </div>
                           <span className={cn(
                             "text-xs font-medium px-2.5 py-1 rounded-md w-fit",
                             slot.type === 'einzel' 
                               ? "bg-brand-200 text-brand-800" 
-                              : "bg-accent-500/10 text-accent-600"
+                              : "bg-accent-500/10 text-accent-600",
+                            isBooked ? "line-through opacity-70" : ""
                           )}>
                             {slot.type === 'einzel' ? 'Einzelsetting' : 'Gruppensetting'}
                           </span>
@@ -372,7 +373,7 @@ export default function ClientBooking() {
                           </span>
                         ) : null}
                       </div>
-                      <div className={cn("flex items-center gap-2 mt-3", isBooked ? "text-brand-500" : "text-brand-600")}>
+                      <div className={cn("flex items-center gap-2 mt-3", isBooked ? "text-brand-500 line-through" : "text-brand-600")}>
                         <Clock size={16} />
                         <span>{format(start, 'HH:mm')} - {format(end, 'HH:mm')} Uhr</span>
                       </div>
