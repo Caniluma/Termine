@@ -3,15 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { AnimatePresence } from 'motion/react';
 import ClientBooking from './pages/ClientBooking';
 import AdminDashboard from './pages/AdminDashboard';
 import { InstallPWA } from './components/InstallPWA';
+import { SplashScreen } from './components/SplashScreen';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
     <Router>
       <div className="min-h-screen flex flex-col">
+        <AnimatePresence>
+          {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+        </AnimatePresence>
+
         <InstallPWA />
         <main className="flex-grow">
           <Routes>
