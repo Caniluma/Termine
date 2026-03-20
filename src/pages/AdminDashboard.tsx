@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Calendar, Plus, Trash2, Users, Clock, LogOut, Lock } from 'lucide-react';
+import { Calendar, Plus, Trash2, Users, Clock, LogOut, Lock, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Slot, FormattedBooking } from '../types';
 
@@ -21,6 +21,18 @@ export default function AdminDashboard() {
   const [newStartTime, setNewStartTime] = useState('');
   const [newEndTime, setNewEndTime] = useState('');
   const [newType, setNewType] = useState<'einzel' | 'gruppe'>('einzel');
+  const [newMaxCapacity, setNewMaxCapacity] = useState<number>(4);
+  const [isMarketingBlocked, setIsMarketingBlocked] = useState<boolean>(false);
+
+  // Modals & Toasts
+  const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
+  const [slotToDelete, setSlotToDelete] = useState<number | null>(null);
+  const [bookingToDelete, setBookingToDelete] = useState<number | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     const savedToken = localStorage.getItem('adminToken');
@@ -148,60 +160,87 @@ export default function AdminDashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ startTime: start, endTime: end, type: newType })
+        body: JSON.stringify({ 
+          startTime: start, 
+          endTime: end, 
+          type: newType,
+          maxCapacity: newType === 'gruppe' ? newMaxCapacity : 1,
+          isBooked: isMarketingBlocked ? 1 : 0
+        })
       });
       if (res.ok) {
         fetchSlots();
         setNewStartTime('');
         setNewEndTime('');
+        setIsMarketingBlocked(false);
+        showToast('Termin erfolgreich erstellt!');
       } else if (res.status === 401) {
         handleLogout();
+      } else {
+        showToast('Fehler beim Erstellen des Termins', 'error');
       }
     } catch (err) {
       console.error(err);
+      showToast('Fehler beim Erstellen des Termins', 'error');
     }
   };
 
-  const handleDeleteSlot = async (id: number) => {
-    if (!confirm('Möchten Sie diesen Termin wirklich löschen?')) return;
+  const handleDeleteSlot = (id: number) => {
+    setSlotToDelete(id);
+  };
+
+  const confirmDeleteSlot = async () => {
+    if (!slotToDelete) return;
     
     try {
-      const res = await fetch(`/api/slots/${id}`, { 
+      const res = await fetch(`/api/slots/${slotToDelete}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         fetchSlots();
+        showToast('Termin erfolgreich gelöscht!');
       } else if (res.status === 401) {
         handleLogout();
       } else {
         const err = await res.json();
-        alert(err.error);
+        showToast(err.error || 'Fehler beim Löschen', 'error');
       }
     } catch (err) {
       console.error(err);
+      showToast('Fehler beim Löschen', 'error');
+    } finally {
+      setSlotToDelete(null);
     }
   };
 
-  const handleDeleteBooking = async (id: number) => {
-    if (!confirm('Möchten Sie diese Buchung wirklich stornieren? Der Termin wird dadurch wieder freigegeben.')) return;
+  const handleDeleteBooking = (id: number) => {
+    setBookingToDelete(id);
+  };
+
+  const confirmDeleteBooking = async () => {
+    if (!bookingToDelete) return;
     
     try {
-      const res = await fetch(`/api/bookings/${id}`, { 
+      const res = await fetch(`/api/bookings/${bookingToDelete}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         fetchBookings();
         fetchSlots(); // Update slots as well since capacity changed
+        showToast('Buchung erfolgreich storniert!');
       } else if (res.status === 401) {
         handleLogout();
       } else {
         const err = await res.json();
-        alert(err.error);
+        showToast(err.error || 'Fehler beim Stornieren', 'error');
       }
     } catch (err) {
       console.error(err);
+      showToast('Fehler beim Stornieren', 'error');
+    } finally {
+      setBookingToDelete(null);
     }
   };
 
@@ -319,9 +358,25 @@ export default function AdminDashboard() {
                     className="w-full px-4 py-2 rounded-xl border border-brand-200 bg-brand-50"
                   >
                     <option value="einzel">Einzelsetting (1 Platz)</option>
-                    <option value="gruppe">Gruppensetting (4 Plätze)</option>
+                    <option value="gruppe">Gruppensetting (Mehrere Plätze)</option>
                   </select>
                 </div>
+                
+                {newType === 'gruppe' && (
+                  <div>
+                    <label className="block text-sm font-medium text-brand-700 mb-1">Anzahl der Plätze (max. 12)</label>
+                    <input 
+                      type="number" 
+                      min="2"
+                      max="12"
+                      required
+                      value={newMaxCapacity}
+                      onChange={e => setNewMaxCapacity(parseInt(e.target.value))}
+                      className="w-full px-4 py-2 rounded-xl border border-brand-200 bg-brand-50"
+                    />
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-brand-700 mb-1">Von</label>
@@ -344,6 +399,20 @@ export default function AdminDashboard() {
                     />
                   </div>
                 </div>
+
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="checkbox"
+                    id="marketingBlock"
+                    checked={isMarketingBlocked}
+                    onChange={e => setIsMarketingBlocked(e.target.checked)}
+                    className="w-4 h-4 text-accent-600 rounded border-brand-300 focus:ring-accent-500"
+                  />
+                  <label htmlFor="marketingBlock" className="text-sm text-brand-700">
+                    Als "Ausgebucht" markieren (Marketing-Aktion)
+                  </label>
+                </div>
+
                 <button type="submit" className="w-full flex items-center justify-center gap-2 bg-accent-500 text-white py-3 rounded-xl hover:bg-accent-600 transition-colors mt-4">
                   <Plus size={20} /> Freigeben
                 </button>
@@ -364,7 +433,7 @@ export default function AdminDashboard() {
                   slots.map(slot => {
                     const start = parseISO(slot.startTime);
                     const end = parseISO(slot.endTime);
-                    const isFullyBooked = slot.bookedCount >= slot.maxCapacity;
+                    const isFullyBooked = slot.isBooked === 1 || slot.bookedCount >= slot.maxCapacity;
                     
                     return (
                       <div key={slot.id} className="flex items-center justify-between p-4 rounded-xl border border-brand-100 bg-brand-50">
@@ -383,7 +452,7 @@ export default function AdminDashboard() {
                         <div className="flex items-center gap-4">
                           {isFullyBooked ? (
                             <span className="px-3 py-1 bg-brand-200 text-brand-800 rounded-full text-xs font-medium">
-                              Ausgebucht ({slot.bookedCount}/{slot.maxCapacity})
+                              {slot.isBooked === 1 && slot.bookedCount === 0 ? 'Blockiert (Marketing)' : `Ausgebucht (${slot.bookedCount}/${slot.maxCapacity})`}
                             </span>
                           ) : (
                             <span className="px-3 py-1 bg-brand-100 text-brand-800 border border-brand-200 rounded-full text-xs font-medium">
@@ -467,6 +536,69 @@ export default function AdminDashboard() {
                 );
               })
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-lg border ${
+            toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {toast.type === 'success' ? <CheckCircle size={20} className="text-green-600" /> : <AlertCircle size={20} className="text-red-600" />}
+            <span className="font-medium">{toast.message}</span>
+            <button onClick={() => setToast(null)} className="ml-4 text-current opacity-70 hover:opacity-100">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Slot Modal */}
+      {slotToDelete && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl">
+            <h3 className="text-xl font-medium text-brand-900 mb-4">Termin löschen</h3>
+            <p className="text-brand-600 mb-8">Möchten Sie diesen Termin wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.</p>
+            <div className="flex gap-4 justify-end">
+              <button 
+                onClick={() => setSlotToDelete(null)}
+                className="px-6 py-2.5 rounded-xl font-medium text-brand-700 hover:bg-brand-50 transition-colors"
+              >
+                Abbrechen
+              </button>
+              <button 
+                onClick={confirmDeleteSlot}
+                className="px-6 py-2.5 rounded-xl font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                Löschen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Booking Modal */}
+      {bookingToDelete && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-xl">
+            <h3 className="text-xl font-medium text-brand-900 mb-4">Buchung stornieren</h3>
+            <p className="text-brand-600 mb-8">Möchten Sie diese Buchung wirklich stornieren? Der Termin wird dadurch wieder freigegeben. Diese Aktion kann nicht rückgängig gemacht werden.</p>
+            <div className="flex gap-4 justify-end">
+              <button 
+                onClick={() => setBookingToDelete(null)}
+                className="px-6 py-2.5 rounded-xl font-medium text-brand-700 hover:bg-brand-50 transition-colors"
+              >
+                Abbrechen
+              </button>
+              <button 
+                onClick={confirmDeleteBooking}
+                className="px-6 py-2.5 rounded-xl font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                Stornieren
+              </button>
+            </div>
           </div>
         </div>
       )}

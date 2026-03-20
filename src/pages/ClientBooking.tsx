@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { Calendar, Clock, Dog, Heart, CheckCircle2 } from 'lucide-react';
+import { Calendar, Clock, Dog, Heart, CheckCircle2, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Slot, FormattedBooking } from '../types';
 
@@ -13,6 +13,12 @@ export default function ClientBooking() {
   const [bookingNumber, setBookingNumber] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'book' | 'my-bookings'>('book');
+  const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // My Bookings state
   const [myBookingNumber, setMyBookingNumber] = useState('');
@@ -112,13 +118,14 @@ export default function ClientBooking() {
         setBookingSuccess(true);
         setSelectedSlots([]);
         fetchSlots();
+        showToast('Buchung erfolgreich!', 'success');
       } else {
         const error = await res.json();
-        alert(error.error || 'Fehler bei der Buchung');
+        showToast(error.error || 'Fehler bei der Buchung', 'error');
       }
     } catch (err) {
       console.error('Booking error', err);
-      alert('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+      showToast('Ein Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.', 'error');
     }
   };
 
@@ -428,7 +435,7 @@ export default function ClientBooking() {
                   const start = parseISO(slot.startTime);
                   const end = parseISO(slot.endTime);
                   const isSelected = selectedSlots.some(s => s.id === slot.id);
-                  const isBooked = slot.bookedCount >= slot.maxCapacity;
+                  const isBooked = slot.isBooked === 1 || slot.bookedCount >= slot.maxCapacity;
                   const spotsLeft = slot.maxCapacity - slot.bookedCount;
                   
                   return (
@@ -589,6 +596,20 @@ export default function ClientBooking() {
                 </button>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
+          <div className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-lg border ${
+            toast.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {toast.type === 'success' ? <CheckCircle size={20} className="text-green-600" /> : <AlertCircle size={20} className="text-red-600" />}
+            <span className="font-medium">{toast.message}</span>
+            <button onClick={() => setToast(null)} className="ml-4 text-current opacity-70 hover:opacity-100">
+              <X size={16} />
+            </button>
           </div>
         </div>
       )}

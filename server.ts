@@ -167,17 +167,24 @@ app.get('/api/admin/slots', requireAdmin, async (req, res) => {
 app.post('/api/slots', requireAdmin, async (req, res) => {
   try {
     const supabase = getSupabase();
-    const { startTime, endTime, type } = req.body;
+    const { startTime, endTime, type, maxCapacity: reqMaxCapacity, isBooked: reqIsBooked } = req.body;
     
     if (!startTime || !endTime || !type) {
       return res.status(400).json({ error: 'Missing fields' });
     }
     
-    const maxCapacity = type === 'gruppe' ? 4 : 1;
+    let maxCapacity = 1;
+    if (reqMaxCapacity !== undefined) {
+      maxCapacity = parseInt(reqMaxCapacity, 10);
+    } else {
+      maxCapacity = type === 'gruppe' ? 4 : 1;
+    }
+
+    const isBooked = reqIsBooked ? 1 : 0;
     
     const { data, error } = await supabase
       .from('slots')
-      .insert([{ startTime, endTime, type, maxCapacity }])
+      .insert([{ startTime, endTime, type, maxCapacity, isBooked }])
       .select()
       .single();
       
@@ -486,14 +493,14 @@ app.post('/api/bookings', async (req, res) => {
       // 1. Check capacity
       const { data: slot, error: slotError } = await supabase
         .from('slots')
-        .select('maxCapacity, bookings(count)')
+        .select('maxCapacity, isBooked, bookings(count)')
         .eq('id', slotId)
         .single();
         
       if (slotError || !slot) throw new Error(`Slot nicht gefunden`);
       
       const bookedCount = slot.bookings[0]?.count || 0;
-      if (bookedCount >= slot.maxCapacity) {
+      if (slot.isBooked === 1 || bookedCount >= slot.maxCapacity) {
         throw new Error(`Ein Termin ist bereits ausgebucht`);
       }
 
