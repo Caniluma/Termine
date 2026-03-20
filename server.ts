@@ -3,7 +3,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 import path from 'path';
 import jwt from 'jsonwebtoken';
-import { getBookingConfirmationEmail, getCancellationEmail } from './src/utils/emailTemplates.js';
+import { getBookingConfirmationEmail, getCancellationEmail, getAdminNotificationEmail } from './src/utils/emailTemplates.js';
 
 const app = express();
 const PORT = 3000;
@@ -446,6 +446,27 @@ app.post('/api/bookings', async (req, res) => {
         });
         
         console.log('Confirmation email sent to', email);
+
+        // Send notification to admin
+        const adminEmailHtml = getAdminNotificationEmail(
+          parentName,
+          childName,
+          email,
+          phone,
+          notes,
+          `CNL-${10000 + bookingIds[0]}`,
+          slotsHtml
+        );
+
+        const adminEmail = process.env.ADMIN_EMAIL || 'info@caniluma.de';
+        await resend.emails.send({
+          from: 'Caniluma <info@termine.caniluma.de>',
+          to: adminEmail,
+          subject: `Neue Buchung: ${childName} (CNL-${10000 + bookingIds[0]})`,
+          html: adminEmailHtml
+        });
+        
+        console.log('Admin notification email sent to', adminEmail);
       } catch (emailErr) {
         console.error('Failed to send confirmation email:', emailErr);
         // We don't throw here because the booking was successful
