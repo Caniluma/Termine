@@ -23,17 +23,17 @@ export default defineConfig(({mode}) => {
           lang: 'de',
           icons: [
             {
-              src: 'https://caniluma.de/wp-content/uploads/2025/11/Logo-ohen-Hintergrund.png',
+              src: 'https://caniluma.de/wp-content/uploads/2026/03/Caniluma-App-Icon.png',
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: 'https://caniluma.de/wp-content/uploads/2025/11/Logo-ohen-Hintergrund.png',
+              src: 'https://caniluma.de/wp-content/uploads/2026/03/Caniluma-App-Icon.png',
               sizes: '512x512',
               type: 'image/png'
             },
             {
-              src: 'https://caniluma.de/wp-content/uploads/2025/11/Logo-ohen-Hintergrund.png',
+              src: 'https://caniluma.de/wp-content/uploads/2026/03/Caniluma-App-Icon.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'
