@@ -430,7 +430,7 @@ export default function ClientBooking() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-4 max-h-[520px] overflow-y-auto pr-2">
                 {slots.map((slot) => {
                   const start = parseISO(slot.startTime);
                   const end = parseISO(slot.endTime);

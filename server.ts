@@ -308,8 +308,8 @@ app.delete('/api/bookings/:id', requireAdmin, async (req, res) => {
         const start = new Date(booking.slots.startTime);
         const end = new Date(booking.slots.endTime);
         
-        const dateStr = start.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const timeStr = `${start.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`;
+        const dateStr = start.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const timeStr = `${start.toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' })} Uhr`;
         const typeStr = booking.slots.type === 'einzel' ? 'Einzelsetting' : 'Gruppensetting';
         
         const emailHtml = getCancellationEmail(
@@ -541,8 +541,8 @@ app.post('/api/bookings', async (req, res) => {
           slotsHtml = '<ul>' + bookedSlots.map(slot => {
             const startDate = new Date(slot.startTime);
             const endDate = new Date(slot.endTime);
-            const dateStr = startDate.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            const timeStr = `${startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr`;
+            const dateStr = startDate.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            const timeStr = `${startDate.toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit' })} Uhr`;
             const typeStr = slot.type === 'einzel' ? 'Einzelsetting' : 'Gruppensetting';
             return `<li><strong>${dateStr}</strong> (${timeStr}) - ${typeStr}</li>`;
           }).join('') + '</ul>';
